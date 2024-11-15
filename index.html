@@ -174,6 +174,7 @@
         <button id="resetButton" onclick="resetTable()">إعادة تعيين جدول</button>
         <button id="showPendingButton" onclick="showPendingLessons()">عرض الدروس المؤجلة</button>
     </div>
+    
 
     <div id="currentMaterial"></div>
     <div id="timer"></div>
@@ -205,6 +206,16 @@
             <tbody></tbody>
         </table>
     </div>
+    <div id="floatingModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); z-index: 1000; font-family: 'VIP Hala Bold'; text-align: center;">
+        <h3 id="modalTitle" style="color: #00796b; margin-bottom: 10px;">السؤال</h3>
+        <input id="modalInput" type="text" style="width: 90%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
+        <div style="text-align: right;">
+            <button id="modalConfirmButton" style="padding: 8px 12px; background-color: #00796b; color: white; border: none; border-radius: 5px; cursor: pointer;">تأكيد</button>
+            <button id="modalCancelButton" style="padding: 8px 12px; background-color: #d32f2f; color: white; border: none; border-radius: 5px; cursor: pointer;">إلغاء</button>
+        </div>
+    </div>
+    <div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+    
 
     <div class="alertBox" id="alertBox"></div>
 
@@ -214,6 +225,8 @@
         let materials = JSON.parse(localStorage.getItem('materials')) || [];
         let countdownInterval;
         let countdownEndTime;
+
+
 
         document.addEventListener("DOMContentLoaded", () => {
             renderTable();
@@ -229,6 +242,7 @@
             updateCountdownDisplay(); 
             countdownInterval = setInterval(updateCountdownDisplay, 1000); 
         }
+        
 
         function checkCompletedLessonsInPending() {
             pendingLessons = pendingLessons.filter(pending => {
@@ -357,61 +371,141 @@
             renderPendingLessonsTable();
         }
 
-        function addNewMaterial() {
-            const materialName = prompt("أدخل اسم المادة:");
-            if (materialName) {
-                const material = {
-                    name: materialName,
-                    lessons: [],
-                    rewardTime: 0,
-                    studyDuration: 0,
-                    started: false
+
+        function openModal(question, callback, showInput = true, isYesNo = false) {
+            document.getElementById('modalTitle').textContent = question;
+            const modalInput = document.getElementById('modalInput');
+            modalInput.style.display = showInput ? 'block' : 'none';
+            modalInput.value = '';
+
+            const confirmButton = document.getElementById('modalConfirmButton');
+            const cancelButton = document.getElementById('modalCancelButton');
+            confirmButton.style.display = isYesNo ? 'none' : 'inline-block';
+            cancelButton.style.display = isYesNo ? 'none' : 'inline-block';
+
+            // تنظيف الأزرار الديناميكية السابقة
+            const existingButtons = document.querySelector('.button-group.dynamic-buttons');
+            if (existingButtons) existingButtons.remove();
+
+            if (isYesNo) {
+                const dynamicButtons = document.createElement('div');
+                dynamicButtons.className = 'button-group dynamic-buttons';
+
+                const yesButton = document.createElement('button');
+                yesButton.textContent = 'نعم';
+                yesButton.onclick = () => {
+                    callback(true);
                 };
-                setStudyTime(material);
-                materials.push(material);
-                saveMaterials();
-                renderTable();
-                document.getElementById('resetButton').style.display = 'block';
+
+                const noButton = document.createElement('button');
+                noButton.textContent = 'لا';
+                noButton.onclick = () => {
+                    callback(false);
+                };
+
+                dynamicButtons.appendChild(yesButton);
+                dynamicButtons.appendChild(noButton);
+                document.getElementById('floatingModal').appendChild(dynamicButtons);
+            } else {
+                confirmButton.onclick = () => {
+                    const answer = modalInput.value.trim();
+                    if (showInput && !answer) {
+                        alert("يرجى إدخال قيمة.");
+                    } else {
+                        callback(answer);
+
+                    }
+                };
             }
+
+                cancelButton.onclick = () => {
+                   closeModal(); // إغلاق المربع العائم عند الضغط على "إلغاء"
+                };
+            
+
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('floatingModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('floatingModal').style.display = 'none';
+            const existingButtons = document.querySelector('.button-group.dynamic-buttons');
+            if (existingButtons) existingButtons.remove();
+        }
+
+
+
+        function addNewMaterial() {
+            openModal("أدخل اسم المادة:", (materialName) => {
+                if (materialName) {
+                    const material = { name: materialName, lessons: [], rewardTime: 0 };
+                    setStudyTime(material);
+                } else {
+                    alert("اسم المادة مطلوب.");
+                }
+            });
         }
 
         function setStudyTime(material) {
-            const studyDuration = prompt("كم عدد الدقائق لمذاكرة المادة؟");
-            if (studyDuration) {
-                material.studyDuration = parseInt(studyDuration) || 0;
-                addLesson(material);
-            } else {
-                alert("يجب إدخال عدد صحيح من الدقائق.");
-            }
-        }
-
-        function addLesson(material) {
-            const lessonName = prompt("أدخل اسم الدرس:");
-            if (lessonName) {
-                material.lessons.push({ lessonName, isCompleted: false });
-                const hasMoreLessons = confirm("هل تريد إضافة درس آخر للمادة نفسها؟");
-                if (hasMoreLessons) {
-                    addLesson(material);
-                } else {
+            openModal("كم عدد الدقائق لمذاكرة المادة؟", (studyDuration) => {
+                if (studyDuration) {
+                    material.studyDuration = parseInt(studyDuration) || 0;
                     setRewardTime(material);
+                } else {
+                    alert("يرجى إدخال عدد دقائق صحيح.");
                 }
-            }
+            });
         }
 
         function setRewardTime(material) {
-            const rewardTime = prompt("أدخل وقت المكافأة بالدقائق (مثال: 30):");
-            material.rewardTime = parseInt(rewardTime) || 0;
-            saveMaterials();
-            askForMoreMaterials();
+            openModal("كم عدد دقائق المكافأة؟", (rewardTime) => {
+                if (rewardTime) {
+                    material.rewardTime = parseInt(rewardTime) || 0;
+                    addLesson(material);
+                } else {
+                    alert("يرجى إدخال عدد دقائق صحيح.");
+                }
+            });
+        }
+        
+
+        function addLesson(material) {
+            openModal("أدخل اسم الدرس:", (lessonName) => {
+                if (lessonName) {
+                    material.lessons.push({
+                        lessonName: lessonName,
+                        isCompleted: false
+                    });
+                    askForMoreLessons(material);
+                } else {
+                    alert("اسم الدرس مطلوب.");
+                }
+            });
         }
 
+        function askForMoreLessons(material) {
+            openModal("هل تريد إضافة درس آخر للمادة؟", (response) => {
+                if (response) {
+                    addLesson(material); // استدعاء إضافة درس
+                } else {
+                    materials.push(material);
+                    askForMoreMaterials(); // استدعاء سؤال إضافة مادة جديدة
+                }
+            }, false, true); // false: لا تظهر المدخلات، true: تظهر أزرار نعم ولا
+        }
+
+
         function askForMoreMaterials() {
-            const addAnother = confirm("هل تريد إضافة مادة جديدة؟");
-            if (addAnother) {
-                addNewMaterial();
-            } else {
-                renderTable();
-            }
+            openModal("هل تريد إضافة مادة جديدة؟", (response) => {
+                if (response) {
+                    addNewMaterial(); // استدعاء إضافة مادة جديدة
+                } else {
+                    closeModal(); // إغلاق النافذة
+                    renderTable();
+                    location.reload();
+                }
+            }, false, true); // false: لا تظهر المدخلات، true: تظهر أزرار نعم ولا
         }
 
         function saveMaterials() {
@@ -420,28 +514,37 @@
         }
 
         function renderTable() {
-            const tableBody = document.getElementById("lessonTable").getElementsByTagName("tbody")[0];
+            const tableBody = document
+              .getElementById("lessonTable")
+              .getElementsByTagName("tbody")[0];
             tableBody.innerHTML = '';
 
             if (materials.length === 0) {
                 document.getElementById('lessonTable').style.display = 'none';
-                document.getElementById('resetButton').style.display = 'none'; 
+                document.getElementById('resetButton').style.display = 'none';
                 return;
             }
 
             materials.forEach((material, index) => {
-                const row = tableBody.insertRow();
+                const row  = tableBody.insertRow();
                 const cell1 = row.insertCell(0);
                 const cell2 = row.insertCell(1);
                 const cell3 = row.insertCell(2);
                 const cell4 = row.insertCell(3);
                 const cell5 = row.insertCell(4);
+                cell1.innerHTML = `
+                   <div>
+                      ${material.name}
+                      <button style="font-size: 12px; padding: 5px 10px; margin-top: 5px;" 
+                          onclick="editMaterial(${index})">تعديل</button>
+                   </div>
+                `;
 
-                cell1.innerHTML = material.name;
                 cell2.innerHTML = material.lessons.map((lesson, i) => `
                     <div>${lesson.lessonName} 
-                        <input type="checkbox" ${lesson.isCompleted ? 'checked' : ''} 
-                            onchange="toggleLessonComplete(${index}, ${i})" />
+                                <input type="checkbox" 
+                               ${lesson.isCompleted ? 'checked' : ''} 
+                               onchange="toggleLessonComplete(${index}, ${i})" />
                     </div>
                 `).join('');
 
@@ -452,16 +555,132 @@
                 startButton.textContent = 'ابدأ';
                 startButton.onclick = () => {
                     startCountdown(material.studyDuration, material);
-                    material.started = true; 
+                    material.started = true;
                     startButton.style.display = 'none';
                     saveMaterials();
                 };
-                if (material.started) startButton.style.display = 'none'; 
+                if (material.started) startButton.style.display = 'none';
                 cell5.appendChild(startButton);
             });
 
-            document.getElementById('lessonTable').style.display = 'block'; 
+            document.getElementById('lessonTable').style.display = 'block';
         }
+
+
+
+        function toggleLessonComplete(materialIndex, lessonIndex) {
+            materials[materialIndex].lessons[lessonIndex].isCompleted = 
+                !materials[materialIndex].lessons[lessonIndex].isCompleted;
+
+            saveMaterials();
+            renderTable();
+
+            const allLessonsCompleted = materials[materialIndex].lessons.every(lesson => lesson.isCompleted);
+    
+            if (allLessonsCompleted) {
+                materials.splice(materialIndex, 1);
+                saveMaterials();
+                renderTable();
+                showAlert("تم الانتهاء من جميع الدروس، وتم حذف المادة.");
+            }
+        }
+
+
+
+        function saveMaterials() {
+            localStorage.setItem('materials', JSON.stringify(materials));
+            localStorage.setItem('pendingLessons', JSON.stringify(pendingLessons));
+        }
+
+        function renderTable() {
+            const tableBody = document
+              .getElementById("lessonTable")
+              .getElementsByTagName("tbody")[0];
+            tableBody.innerHTML = '';
+
+            if (materials.length === 0) {
+              document.getElementById('lessonTable').style.display = 'none';
+                document.getElementById('resetButton').style.display = 'none';
+        return;
+            }
+
+            materials.forEach((material, index) => {
+                const row  = tableBody.insertRow();
+                const cell1 = row.insertCell(0);
+                const cell2 = row.insertCell(1);
+                const cell3 = row.insertCell(2);
+                const cell4 = row.insertCell(3);
+                const cell5 = row.insertCell(4);
+                cell1.innerHTML = `
+                   <div>
+                      ${material.name}
+                      <button style="font-size: 12px; padding: 5px 10px; margin-top: 5px;" 
+                          onclick="editMaterial(${index})">تعديل</button>
+                   </div>
+                `;
+
+                cell2.innerHTML = material.lessons.map((lesson, i) => `
+                    <div>${lesson.lessonName} 
+                                <input type="checkbox" 
+                               ${lesson.isCompleted ? 'checked' : ''} 
+                               onchange="toggleLessonComplete(${index}, ${i})" />
+                    </div>
+                `).join('');
+
+                cell3.innerHTML = `${material.studyDuration} دقيقة`;
+                cell4.innerHTML = `${material.rewardTime} دقيقة`;
+
+                const startButton = document.createElement('button');
+                startButton.textContent = 'ابدأ';
+                startButton.onclick = () => {
+                    startCountdown(material.studyDuration, material);
+                    material.started = true;
+                    startButton.style.display = 'none';
+                    saveMaterials();
+                };
+                if (material.started) startButton.style.display = 'none';
+                cell5.appendChild(startButton);
+            });
+
+            document.getElementById('lessonTable').style.display = 'block';
+        }
+
+        function editMaterial(index) {
+            const material = materials[index];
+
+    // تعديل اسم المادة
+            const newName = prompt("أدخل اسم المادة الجديد:", material.name);
+            if (newName) 
+                material.name = newName;
+
+    // تعديل عدد الدقائق
+            const newDuration = prompt("أدخل عدد الدقائق الجديد:", material.studyDuration);
+            if (newDuration) 
+                material.studyDuration = parseInt(newDuration);
+
+    // تعديل المكافأة
+            const newReward = prompt("أدخل وقت المكافأة الجديد:", material.rewardTime);
+            if (newReward) 
+                material.rewardTime = parseInt(newReward);
+
+    // تعديل الدروس
+            const newLessons = prompt(
+                "أدخل الدروس الجديدة مفصولة بفاصلة:", 
+                material.lessons.map(l => l.lessonName).join(',')
+            );
+            if (newLessons) {
+                material.lessons = newLessons.split(',').map(lessonName => ({
+                    lessonName: lessonName.trim(),
+                    isCompleted: false
+                }));
+            }
+
+            saveMaterials();
+            renderTable();
+        }
+
+
+        
 
         function toggleLessonComplete(materialIndex, lessonIndex) {
             materials[materialIndex].lessons[lessonIndex].isCompleted = 
@@ -594,3 +813,6 @@
     </script>
 </body>
 </html>
+
+
+
